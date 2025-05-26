@@ -108,6 +108,7 @@ class SLEAP_Analysis:
             "rgaitdown": rbfoot_gait_down # this is the final data you want
         }
     
+    
     def visualize(self):
         """
         Visualizes the data as a series of plots that show the location of 
