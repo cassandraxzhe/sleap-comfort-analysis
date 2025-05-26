@@ -11,7 +11,7 @@ from scipy.differentiate import derivative
 class SLEAP_Analysis:
     def __init__(self, filename, start_frame=0, end_frame=None, framerate=30, threshold=1, subject="Achilles", group="Preop", session="1"):
         # Body part indices
-        self.L_BACK_FOOT_INDEX = 0
+        self.L_BACK_FOOT_INDEX = 3
         self.R_BACK_FOOT_INDEX = 1
 
         # Other parameters
@@ -69,46 +69,47 @@ class SLEAP_Analysis:
         self.locations = self.fill_missing(self.locations)
 
         # get the locations of each foot
-        lbfoot_loc = self.locations[self.start_frame:self.end_frame, self.L_BACK_FOOT_INDEX, :, :]
-        rbfoot_loc = self.locations[self.start_frame:self.end_frame, self.R_BACK_FOOT_INDEX , :, :]
+        self.lbfoot_loc = self.locations[self.start_frame:self.end_frame, self.L_BACK_FOOT_INDEX, :, :]
+        self.rbfoot_loc = self.locations[self.start_frame:self.end_frame, self.R_BACK_FOOT_INDEX , :, :]
 
         # visualize the x coordniates
-        self.plot_locs(lbfoot_loc, rbfoot_loc, title + " Back Feet Tracking")
+        self.visualize()
+        # self.plot_locs(lbfoot_loc, rbfoot_loc, title + " Back Feet Tracking")
 
         # calculate deriv
-        lbfoot_deriv = self.dx(lbfoot_loc)
-        rbfoot_deriv = self.dx(rbfoot_loc)
+        self.lbfoot_deriv = self.dx(self.lbfoot_loc)
+        self.rbfoot_deriv = self.dx(self.rbfoot_loc)
 
         # plot deriv
-        self.plot_deriv(lbfoot_deriv, rbfoot_deriv, lbfoot_loc, rbfoot_loc)
+        self.plot_deriv(self.lbfoot_deriv, self.rbfoot_deriv, self.lbfoot_loc, self.rbfoot_loc)
 
         # find % total downtime
-        lbfoot_down, lbfoot_percent_down, lbfoot_indices  = self.calc_downtime(lbfoot_deriv)
-        rbfoot_down, rbfoot_percent_down, rbfoot_indices = self.calc_downtime(rbfoot_deriv)
+        lbfoot_down, self.lbfoot_percent_down, self.lbfoot_indices  = self.calc_downtime(self.lbfoot_deriv)
+        rbfoot_down, self.rbfoot_percent_down, self.rbfoot_indices = self.calc_downtime(self.rbfoot_deriv)
 
         # find % downtime per gait cycle
-        lbfoot_gait = self.calc_gait_downtime(lbfoot_indices)
-        rbfoot_gait = self.calc_gait_downtime(rbfoot_indices)
+        lbfoot_gait = self.calc_gait_downtime(self.lbfoot_indices)
+        rbfoot_gait = self.calc_gait_downtime(self.rbfoot_indices)
 
         lbfoot_gait_down = [tup[2] for tup in lbfoot_gait]
         rbfoot_gait_down = [tup[2] for tup in rbfoot_gait]
 
         # graph the left / right comparison
-        self.plot_analysis(lbfoot_gait_down, rbfoot_gait_down, lbfoot_percent_down, rbfoot_percent_down, title)
+        self.plot_analysis(lbfoot_gait_down, rbfoot_gait_down, self.lbfoot_percent_down, self.rbfoot_percent_down, title)
 
         # return the data
         return {
-            "llocs": lbfoot_loc,
-            "rlocs": rbfoot_loc,
-            "lderiv": lbfoot_deriv,
-            "rderiv": rbfoot_deriv,
-            "lpercentdown": lbfoot_percent_down,
-            "rpercentdown": rbfoot_percent_down,
+            "llocs": self.lbfoot_loc,
+            "rlocs": self.rbfoot_loc,
+            "lderiv": self.lbfoot_deriv,
+            "rderiv": self.rbfoot_deriv,
+            "lpercentdown": self.lbfoot_percent_down,
+            "rpercentdown": self.rbfoot_percent_down,
             "lgaitdown": lbfoot_gait_down, # this is the final data you want
             "rgaitdown": rbfoot_gait_down # this is the final data you want
         }
     
-    
+
     def visualize(self):
         """
         Visualizes the data as a series of plots that show the location of 
@@ -333,7 +334,7 @@ class SLEAP_Analysis:
         return downtimes
     
 
-    def plot_deriv(left_deriv, right_deriv, left_loc, right_loc):
+    def plot_deriv(self, left_deriv, right_deriv, left_loc, right_loc):
         fig = plt.figure(figsize=(15,7))
         ax1 = fig.add_subplot(211)
 
@@ -350,7 +351,7 @@ class SLEAP_Analysis:
         ax1.set_title('Back Feet')
 
 
-    def plot_analysis(left_gait_down, right_gait_down, left_total_down, right_total_down, title):
+    def plot_analysis(self, left_gait_down, right_gait_down, left_total_down, right_total_down, title):
         np.random.seed(123)
 
         w = 0.5    # bar width
