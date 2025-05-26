@@ -19,6 +19,7 @@ class SLEAP_Analysis:
         self.end_frame = end_frame
         self.framerate = framerate # Default framerate, can be adjusted
         self.threshold = threshold  # Default threshold for gait analysis, can be adjusted
+        self.filename = filename
 
         # Experiment metadata
         self.subject = subject
@@ -267,34 +268,6 @@ class SLEAP_Analysis:
         print("Down for", foot_down, "frames:", foot_down/total*100, "percent of total time.")
         return foot_down, foot_down / total * 100, indices
 
-
-    # def get_gait_data(self):
-    #     """
-    #     Returns the left and right gait data as a 2d list `data` such that
-    #     data[0] = the left leg stance time list and data[1] = the right leg
-    #     stance time list.
-    #     """
-    #     # apply savitzky-golay
-    #     self.lbfoot = self.smooth_diff(self.lbfoot_loc[:, :, 0])
-    #     self.rbfoot = self.smooth_diff(self.rbfoot_loc[:, :, 0])
-
-    #     # calculate dx/dt at each frame
-    #     self.lbfoot_deriv = self.dx(self.lbfoot_loc)
-    #     self.rbfoot_deriv = self.dx(self.rbfoot_loc)
-
-    #     # Calculate the downtime for each foot
-    #     self.lbfoot_down = self.calc_downtime(self.lbfoot_deriv)
-    #     self.rbfoot_down = self.calc_downtime(self.rbfoot_deriv)
-        
-    #     # get the percentage of time in stance
-    #     self.lbfoot_gait_down = self.calc_gait_downtime(self.lbfoot_down[2])
-    #     self.lbfoot_down_percents = [tup[2] for tup in self.lbfoot_gait_down]
-
-    #     self.rbfoot_gait_down = self.calc_gait_downtime(self.rbfoot_down[2])
-    #     self.rbfoot_down_percents = [tup[2] for tup in self.rbfoot_gait_down]
-
-    #     return [self.lbfoot_down_percents, self.rbfoot_down_percents]
-    
 
     def calc_gait_downtime(self, indices):
         """
