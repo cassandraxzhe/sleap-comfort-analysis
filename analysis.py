@@ -11,10 +11,8 @@ from scipy.differentiate import derivative
 class SLEAP_Analysis:
     def __init__(self, filename, start_frame=0, end_frame=None, framerate=30, threshold=1, subject="Achilles", group="Preop", session="1"):
         # Body part indices
-        self.L_BACK_FOOT_INDEX = 3
+        self.L_BACK_FOOT_INDEX = 0
         self.R_BACK_FOOT_INDEX = 1
-        self.L_BACK_FETLOCK_INDEX = 2
-        self.R_BACK_FETLOCK_INDEX = 0
 
         # Other parameters
         self.start_frame = start_frame
@@ -28,7 +26,7 @@ class SLEAP_Analysis:
         self.session = session
 
         # Load the SLEAP data from the specified file
-        self.dset_names, self.locations, self.node_names = self.open_file(filename)
+        self.dset_names, self.locations, self.node_names = self.open_file()
         print("\n===filename===")
         print(self.filename)
         print("\n===HDF5 datasets===")
@@ -46,7 +44,7 @@ class SLEAP_Analysis:
         print("instance count:", self.instance_count)
 
 
-    def open_file(self, filename):
+    def open_file(self):
         """
         Reads h5 file data.
 
@@ -54,7 +52,7 @@ class SLEAP_Analysis:
         @returns 
 
         """
-        with h5py.File(filename, "r") as f:
+        with h5py.File(self.filename, "r") as f:
             dset_names = list(f.keys())
             # print(dset_names)
             locations = f["tracks"][:].T
@@ -63,15 +61,51 @@ class SLEAP_Analysis:
 
     
     def analyze(self):
-        """
-        Conducts stance time analysis of the h5 data.
-        """
-        # Placeholder for analysis logic
-        print("Analyzing SLEAP data...")
 
+        title = f'{self.subject} {self.group} Session {self.session}'
+
+        # fill in NaN values
         self.locations = self.fill_missing(self.locations)
 
-        return 
+        # get the locations of each foot
+        lbfoot_loc = self.locations[self.start_frame:self.end_frame, self.L_BACK_FOOT_INDEX, :, :]
+        rbfoot_loc = self.locations[self.start_frame:self.end_frame, self.R_BACK_FOOT_INDEX , :, :]
+
+        # visualize the x coordniates
+        self.plot_locs(lbfoot_loc, rbfoot_loc, title + " Back Feet Tracking")
+
+        # calculate deriv
+        lbfoot_deriv = self.dx(lbfoot_loc)
+        rbfoot_deriv = self.dx(rbfoot_loc)
+
+        # plot deriv
+        self.plot_deriv(lbfoot_deriv, rbfoot_deriv, lbfoot_loc, rbfoot_loc)
+
+        # find % total downtime
+        lbfoot_down, lbfoot_percent_down, lbfoot_indices  = self.calc_downtime(lbfoot_deriv)
+        rbfoot_down, rbfoot_percent_down, rbfoot_indices = self.calc_downtime(rbfoot_deriv)
+
+        # find % downtime per gait cycle
+        lbfoot_gait = self.calc_gait_downtime(lbfoot_indices)
+        rbfoot_gait = self.calc_gait_downtime(rbfoot_indices)
+
+        lbfoot_gait_down = [tup[2] for tup in lbfoot_gait]
+        rbfoot_gait_down = [tup[2] for tup in rbfoot_gait]
+
+        # graph the left / right comparison
+        self.plot_analysis(lbfoot_gait_down, rbfoot_gait_down, lbfoot_percent_down, rbfoot_percent_down, title)
+
+        # return the data
+        return {
+            "llocs": lbfoot_loc,
+            "rlocs": rbfoot_loc,
+            "lderiv": lbfoot_deriv,
+            "rderiv": rbfoot_deriv,
+            "lpercentdown": lbfoot_percent_down,
+            "rpercentdown": rbfoot_percent_down,
+            "lgaitdown": lbfoot_gait_down, # this is the final data you want
+            "rgaitdown": rbfoot_gait_down # this is the final data you want
+        }
     
     def visualize(self):
         """
@@ -234,22 +268,139 @@ class SLEAP_Analysis:
         return foot_down, foot_down / total * 100, indices
 
 
-    def get_gait_data(self):
+    # def get_gait_data(self):
+    #     """
+    #     Returns the left and right gait data as a 2d list `data` such that
+    #     data[0] = the left leg stance time list and data[1] = the right leg
+    #     stance time list.
+    #     """
+    #     # apply savitzky-golay
+    #     self.lbfoot = self.smooth_diff(self.lbfoot_loc[:, :, 0])
+    #     self.rbfoot = self.smooth_diff(self.rbfoot_loc[:, :, 0])
+
+    #     # calculate dx/dt at each frame
+    #     self.lbfoot_deriv = self.dx(self.lbfoot_loc)
+    #     self.rbfoot_deriv = self.dx(self.rbfoot_loc)
+
+    #     # Calculate the downtime for each foot
+    #     self.lbfoot_down = self.calc_downtime(self.lbfoot_deriv)
+    #     self.rbfoot_down = self.calc_downtime(self.rbfoot_deriv)
+        
+    #     # get the percentage of time in stance
+    #     self.lbfoot_gait_down = self.calc_gait_downtime(self.lbfoot_down[2])
+    #     self.lbfoot_down_percents = [tup[2] for tup in self.lbfoot_gait_down]
+
+    #     self.rbfoot_gait_down = self.calc_gait_downtime(self.rbfoot_down[2])
+    #     self.rbfoot_down_percents = [tup[2] for tup in self.rbfoot_gait_down]
+
+    #     return [self.lbfoot_down_percents, self.rbfoot_down_percents]
+    
+
+    def calc_gait_downtime(self, indices):
         """
-        Returns the left and right gait data as a 2d list `data` such that
-        data[0] = the left leg stance time list and data[1] = the right leg
-        stance time list.
+        Parameters
+        ----------
+            indices : list
+            list of indices where the foot is down
+            threshold : int
+            min number of frames to be considered a valid gait cycle;
+            helps with any noise in data
+
+        Return
+        ----------
+            downtimes : list
+            list of tuples of the form (down_frames, total_frames, percent)
+            down_frames : int
+                number of frames where the foot is down for that gait cycle
+            total_frames : int
+                total number of frames in that gait cycle
+            percent : float
+                percentage of time spent in contact with the ground for that
+                gait cycle
         """
-        # apply savitzky-golay
-        self.lbfoot = self.smooth_diff(self.lbfoot_loc[:, :, 0])
-        self.rbfoot = self.smooth_diff(self.rbfoot_loc[:, :, 0])
+        # print(indices)
+        downtimes = []
 
-        # calculate dx/dt at each frame
-        self.lbfoot_deriv = self.dx(self.lbfoot_loc)
-        self.rbfoot_deriv = self.dx(self.rbfoot_loc)
+        down_frames = 0
+        prev = 0
+        cycle_start = 0
 
-        # Calculate the downtime for each foot
-        self.lbfoot_down = self.calc_downtime(self.lbfoot_deriv)
-        self.rbfoot_down = self.calc_downtime(self.rbfoot_deriv)
+        for frame in indices:
+            # at the start
+            if down_frames == 0:
+                prev = frame
+                cycle_start = frame
+                down_frames += 1
 
-        return [self.lbfoot_down, self.rbfoot_down]
+            # if this frame is a continuation of the last frame
+            elif frame <= prev + self.threshold or down_frames < self.threshold:
+                prev = frame
+                down_frames += 1
+
+            # if there is a skip in indices, i.e. new gait cycle
+            elif down_frames >= self.threshold:
+
+                # add the information from the finished gait cycle
+                if down_frames / (prev - cycle_start + 1) < 1:
+                    downtimes.append(
+                        (
+                            down_frames,
+                            prev - cycle_start,
+                            down_frames / (prev - cycle_start + 1) * 100
+                        )
+                    )
+
+                # set the values for this gait cycle
+                cycle_start = prev
+                prev = frame
+                down_frames = 1
+
+        print(downtimes)
+        return downtimes
+    
+
+    def plot_deriv(left_deriv, right_deriv, left_loc, right_loc):
+        fig = plt.figure(figsize=(15,7))
+        ax1 = fig.add_subplot(211)
+
+        # plot x values
+        ax1.plot(left_loc[:, 0, 0], 'k', label='left')
+        ax1.plot(right_loc[:, 0, 0], 'r', label='right')
+
+        # plot x derivatives
+        ax1.plot(left_deriv, 'k')
+        ax1.plot(right_deriv, 'r')
+
+        ax1.legend()
+        ax1.set_xticks([])
+        ax1.set_title('Back Feet')
+
+
+    def plot_analysis(left_gait_down, right_gait_down, left_total_down, right_total_down, title):
+        np.random.seed(123)
+
+        w = 0.5    # bar width
+        x = [1, 2] # x-coordinates of your bars
+        colors = ['y', 'g']#[(0, 0, 1, 1), (1, 0, 0, 1)]    # corresponding colors
+        y = [left_gait_down, right_gait_down]      # data series
+        print(len(x), len(y))
+
+        fig, ax = plt.subplots()
+
+        ax.bar(x,
+                height=[left_total_down, right_total_down],
+                yerr=[np.std(yi) for yi in y],    # error bars
+                capsize=12, # error bar cap width in points
+                width=w,    # bar width
+                tick_label=["left", "right"],
+                color=(0,0,0,0),  # face color transparent
+                edgecolor=colors,
+                #ecolor=colors,    # error bar colors; setting this raises an error for whatever reason.
+                )
+        plt.title(title + ' hind foot downtime per gait cycle')
+        for i in range(len(x)):
+            # distribute scatter randomly across whole width of bar
+            ax.scatter(x[i] + np.random.random(len(y[i])) * w - w / 2, y[i], color=colors[i])
+
+        plt.show()
+
