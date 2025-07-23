@@ -11,7 +11,7 @@ from scipy.differentiate import derivative
 class SLEAP_Analysis:
     def __init__(self, filename, start_frame=0, end_frame=None, framerate=30, threshold=1, subject="Achilles", group="Preop", session="1"):
         # Body part indices
-        self.L_BACK_FOOT_INDEX = 3
+        self.L_BACK_FOOT_INDEX = 0
         self.R_BACK_FOOT_INDEX = 1
 
         # Other parameters
